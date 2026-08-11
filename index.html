@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scadenze Calendar</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="container">
+    <header class="top-bar">
+      <h1>📅 Scadenze Calendar</h1>
+      <div class="actions">
+        <button id="btn-refresh" class="btn btn-secondary" style="display: none;">🔄 Aggiorna</button>
+        <button id="btn-settings" class="btn btn-secondary" style="display: none;">⚙️ Opzioni</button>
+        <button id="btn-login" class="btn btn-primary">Accedi</button>
+        <button id="btn-logout" class="btn btn-danger" style="display: none;">Esci</button>
+      </div>
+    </header>
+
+    <div id="status-message" class="status-box">Inizializzazione librerie Google...</div>
+
+    <!-- Tabella Task -->
+    <table class="task-table">
+      <thead>
+        <tr>
+          <th>Stato</th>
+          <th>Data e Ora</th>
+          <th>Impegno / Task</th>
+          <th>Priorità</th>
+        </tr>
+      </thead>
+      <tbody id="task-list">
+        <!-- Generato dinamicamente -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Modal Password Opzioni -->
+  <div id="password-modal" class="modal">
+    <div class="modal-content text-center">
+      <h3>Area Riservata</h3>
+      <p>Inserisci il PIN per accedere alle opzioni:</p>
+      <input type="password" id="settings-pin" placeholder="PIN" maxlength="10">
+      <div class="modal-actions">
+        <button id="btn-confirm-pin" class="btn btn-primary">Conferma</button>
+        <button id="btn-close-pin" class="btn btn-secondary">Annulla</button>
+      </div>
+    </div>
+  </div>
+
+ <!-- Modal Impostazioni Priorità e Intervallo -->
+  <div id="settings-modal" class="modal">
+    <div class="modal-content">
+      <h3>⚙️ Configurazione Visualizzazione e Priorità</h3>
+      <p class="subtitle">Personalizza l'intervallo temporale e i criteri di urgenza:</p>
+      
+      <div class="form-group">
+        <label>Giorni passati da visualizzare:</label>
+        <input type="number" id="days-past" value="30">
+      </div>
+
+      <div class="form-group">
+        <label>Giorni futuri da visualizzare:</label>
+        <input type="number" id="days-future" value="100">
+      </div>
+
+      <div class="form-group">
+        <label>Considera URGENTE se entro (giorni):</label>
+        <input type="number" id="days-urgent" value="10">
+      </div>
+
+      <div class="csv-actions">
+        <h4>Gestione Backup CSV</h4>
+        <button id="btn-export-csv" class="btn btn-small">💾 Esporta CSV</button>
+        <label for="btn-import-csv" class="btn btn-small btn-secondary">📂 Importa CSV</label>
+        <input type="file" id="btn-import-csv" accept=".csv" style="display: none;">
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-save-settings" class="btn btn-primary">Salva e Applica</button>
+        <button id="btn-close-settings" class="btn btn-secondary">Chiudi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1. PRIMA CARICHIAMO I SCRIPT LOCALI -->
+  <script src="config.js"></script>
+  <script src="google-api.js"></script>
+  <script src="app.js"></script>
+
+  <!-- 2. POI LE LIBRERIE GOOGLE (CHE CHIAMANO LE FUNZIONI DI GOOGLE-API.JS) -->
+  <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()" async defer></script>
+  <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()" async defer></script>
+</body>
+</html>
