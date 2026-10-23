@@ -10,11 +10,15 @@ let settings = {
 let loadedEvents = [];
 
 function loadSettings() {
-  const saved = localStorage.getItem('app_calendar_settings');
-  if (saved) {
-    settings = { ...settings, ...JSON.parse(saved) };
+  try {
+    const saved = localStorage.getItem('app_calendar_settings');
+    if (saved) {
+      settings = { ...settings, ...JSON.parse(saved) };
+    }
+  } catch (e) {
+    console.warn("Impostazioni non leggibili, uso quelle predefinite:", e);
   }
-  
+
   const inputPast = document.getElementById('days-past');
   const inputFuture = document.getElementById('days-future');
   const inputUrgent = document.getElementById('days-urgent');
@@ -32,12 +36,40 @@ function saveSettings() {
   settings.pastDays = parseInt(inputPast.value, 10) || 30;
   settings.futureDays = parseInt(inputFuture.value, 10) || 100;
   settings.daysUrgent = parseInt(inputUrgent.value, 10) || 10;
-  
+
   localStorage.setItem('app_calendar_settings', JSON.stringify(settings));
   alert('Impostazioni salvate con successo!');
   document.getElementById('settings-modal').classList.remove('active');
-  
+
   refreshTasksSilent();
+}
+
+/* ---------- Stato di accesso ---------- */
+
+// Mostra l'interfaccia da utente connesso e carica i task
+async function onLoggedIn() {
+  document.getElementById('btn-login').style.display = 'none';
+  document.getElementById('btn-logout').style.display = 'inline-block';
+  document.getElementById('btn-refresh').style.display = 'inline-block';
+  document.getElementById('btn-settings').style.display = 'inline-block';
+  await refreshTasksSilent();
+}
+
+// Torna alla schermata iniziale (non connesso)
+function onLoggedOut(message) {
+  document.getElementById('btn-login').style.display = 'inline-block';
+  document.getElementById('btn-logout').style.display = 'none';
+  document.getElementById('btn-refresh').style.display = 'none';
+  document.getElementById('btn-settings').style.display = 'none';
+  document.getElementById('task-list').innerHTML = '';
+  loadedEvents = [];
+  showStatus(message || "Disconnesso. Clicca su 'Accedi'.", "#e3f2fd");
+}
+
+// Sessione scaduta: elimina il token e chiede di nuovo l'accesso
+function handleSessionExpired() {
+  clearToken();
+  onLoggedOut("Sessione scaduta. Clicca su 'Accedi' per continuare.");
 }
 
 async function refreshTasksSilent() {
@@ -48,9 +80,15 @@ async function refreshTasksSilent() {
     showStatus("Connessione a Google riuscita! Caricamento completato.", "#d4edda");
   } catch (err) {
     console.error(err);
+    if (isAuthError(err)) {
+      handleSessionExpired();
+      return;
+    }
     showStatus("Errore durante il recupero dei dati da Google Calendar.", "#f8d7da");
   }
 }
+
+/* ---------- Logica task ---------- */
 
 // Controlla se il tag [FATTO] è presente nella descrizione
 function isEventCompleted(event) {
@@ -75,14 +113,15 @@ function getPriorityInfo(eventDateStr, isCompleted) {
 
   if (diffDays <= settings.daysUrgent) {
     return { label: 'URGENTE', class: 'urgente', badgeClass: 'badge-urgente' };
-  } 
+  }
 
   return { label: 'FUTURO', class: 'futuro', badgeClass: 'badge-futuro' };
 }
 
 // Gestore cambio spunta
 async function toggleTaskCompleted(event, isChecked) {
-  let desc = event.description || '';
+  const previousDesc = event.description || '';
+  let desc = previousDesc;
 
   if (isChecked) {
     if (!desc.toUpperCase().includes('[FATTO]')) {
@@ -99,6 +138,15 @@ async function toggleTaskCompleted(event, isChecked) {
     await updateGoogleCalendarEventDescription(event.id, desc);
   } catch (err) {
     console.error("Errore salvataggio su Google Calendar:", err);
+    // Ripristina lo stato precedente se il salvataggio non è riuscito
+    event.description = previousDesc;
+    renderTasks(loadedEvents);
+
+    if (isAuthError(err)) {
+      handleSessionExpired();
+    } else {
+      showStatus("Impossibile salvare la modifica su Google Calendar.", "#f8d7da");
+    }
   }
 }
 
@@ -108,7 +156,12 @@ function renderTasks(events) {
   tbody.innerHTML = '';
 
   if (!events || events.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4">Nessun impegno trovato nell'intervallo selezionato (-${settings.pastDays}gg / +${settings.futureDays}gg).</td></tr>`;
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 4;
+    td.textContent = `Nessun impegno trovato nell'intervallo selezionato (-${settings.pastDays}gg / +${settings.futureDays}gg).`;
+    tr.appendChild(td);
+    tbody.appendChild(tr);
     return;
   }
 
@@ -128,7 +181,7 @@ function renderTasks(events) {
   sortedEvents.forEach(event => {
     const start = event.start.dateTime || event.start.date;
     const isDone = isEventCompleted(event);
-    
+
     const dateFormatted = new Date(start).toLocaleString('it-IT', {
       day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
     });
@@ -140,25 +193,44 @@ function renderTasks(events) {
       tr.classList.add('task-completed');
     }
 
-    tr.innerHTML = `
-      <td><input type="checkbox" class="task-checkbox" ${isDone ? 'checked' : ''}></td>
-      <td>${dateFormatted}</td>
-      <td><span class="task-title ${priority.class}">${event.summary || 'Senza Titolo'}</span></td>
-      <td><span class="badge ${priority.badgeClass}">${priority.label}</span></td>
-    `;
-
-    const checkbox = tr.querySelector('.task-checkbox');
+    // Colonna 1: spunta
+    const tdCheck = document.createElement('td');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'task-checkbox';
+    checkbox.checked = isDone;
     checkbox.addEventListener('change', (e) => {
       toggleTaskCompleted(event, e.target.checked);
     });
+    tdCheck.appendChild(checkbox);
 
+    // Colonna 2: data
+    const tdDate = document.createElement('td');
+    tdDate.textContent = dateFormatted;
+
+    // Colonna 3: titolo (textContent evita di interpretare HTML presente nei titoli)
+    const tdTitle = document.createElement('td');
+    const title = document.createElement('span');
+    title.className = `task-title ${priority.class}`;
+    title.textContent = event.summary || 'Senza Titolo';
+    tdTitle.appendChild(title);
+
+    // Colonna 4: priorità
+    const tdBadge = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = `badge ${priority.badgeClass}`;
+    badge.textContent = priority.label;
+    tdBadge.appendChild(badge);
+
+    tr.append(tdCheck, tdDate, tdTitle, tdBadge);
     tbody.appendChild(tr);
   });
 }
 
-// Gestione Backup CSV
+/* ---------- Backup CSV ---------- */
+
 function exportSettingsToCSV() {
-  const csvContent = "data:text/csv;charset=utf-8,Chiave,Valore\n" 
+  const csvContent = "data:text/csv;charset=utf-8,Chiave,Valore\n"
     + `pastDays,${settings.pastDays}\n`
     + `futureDays,${settings.futureDays}\n`
     + `daysUrgent,${settings.daysUrgent}\n`;
@@ -173,28 +245,35 @@ function exportSettingsToCSV() {
 }
 
 function importSettingsFromCSV(e) {
-  const file = e.target.files[0];
+  const input = e.target;
+  const file = input.files[0];
   if (!file) return;
 
   const reader = new FileReader();
   reader.onload = function(evt) {
-    const lines = evt.target.result.split('\n');
+    const lines = evt.target.result.split(/\r?\n/);
     lines.forEach(line => {
-      const parts = line.split(',');
-      if (parts[0] === 'pastDays') settings.pastDays = parseInt(parts[1], 10);
-      if (parts[0] === 'futureDays') settings.futureDays = parseInt(parts[1], 10);
-      if (parts[0] === 'daysUrgent') settings.daysUrgent = parseInt(parts[1], 10);
+      const parts = line.split(',').map(p => p.trim());
+      const value = parseInt(parts[1], 10);
+      if (isNaN(value)) return;
+      if (parts[0] === 'pastDays') settings.pastDays = value;
+      if (parts[0] === 'futureDays') settings.futureDays = value;
+      if (parts[0] === 'daysUrgent') settings.daysUrgent = value;
     });
-    
+
     document.getElementById('days-past').value = settings.pastDays;
     document.getElementById('days-future').value = settings.futureDays;
     document.getElementById('days-urgent').value = settings.daysUrgent;
     saveSettings();
+
+    // Permette di reimportare lo stesso file in futuro
+    input.value = '';
   };
   reader.readAsText(file);
 }
 
-// Event Listeners
+/* ---------- Event Listeners ---------- */
+
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
 
@@ -205,15 +284,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     tokenClient.callback = async (resp) => {
-      if (resp.error) return;
-      document.getElementById('btn-login').style.display = 'none';
-      document.getElementById('btn-logout').style.display = 'inline-block';
-      document.getElementById('btn-refresh').style.display = 'inline-block';
-      document.getElementById('btn-settings').style.display = 'inline-block';
-      await refreshTasksSilent();
+      if (resp.error) {
+        showStatus("Accesso non riuscito: " + resp.error, "#f8d7da");
+        return;
+      }
+      saveToken(resp);
+      await onLoggedIn();
     };
 
     tokenClient.requestAccessToken({ prompt: '' });
+  });
+
+  document.getElementById('btn-logout').addEventListener('click', () => {
+    clearToken();
+    onLoggedOut("Disconnesso. Clicca su 'Accedi' per riconnetterti.");
   });
 
   document.getElementById('btn-refresh').addEventListener('click', refreshTasksSilent);
