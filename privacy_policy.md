@@ -1,0 +1,42 @@
+# Norme sulla Privacy (Privacy Policy)
+
+**Ultimo aggiornamento:** 2 Novembre 2026
+
+## 1. Introduzione
+Questa applicazione ("L'App") è uno strumento sviluppato a scopo personale/integrativo che consente agli utenti di creare e gestire eventi e attività sincronizzandoli direttamente con **Google Calendar** e **Google Tasks**. 
+
+La presente informativa descrive le modalità con cui l'applicazione gestisce e protegge le informazioni e i dati dell'utente.
+
+---
+
+## 2. Dati raccolti e utilizzo delle API di Google
+L'applicazione interagisce esclusivamente con le API ufficiali di Google previa autorizzazione dell'utente tramite autenticazione OAuth 2.0.
+
+In particolare, l'App richiede l'accesso a:
+* **Google Calendar API:** Per creare, consultare e aggiornare eventi sul calendario dell'utente su sua esplicita richiesta.
+* **Google Tasks API:** Per creare e gestire l'elenco dei compiti e delle attività dell'utente su sua esplicita richiesta.
+
+### Utilizzo limitato dei dati (*Google API Services User Data Policy*)
+* L'App accede ai dati del profilo e del calendario/tasks **esclusivamente per eseguire le funzionalità richieste dall'utente** (es. aggiunta di un nuovo evento o di una nuova attività).
+* L'App **non memorizza**, **non trasferisce** e **non vende** alcuna informazione personale o dato dell'utente a server esterni o a terze parti.
+* Nessun dato contenuto nel tuo Google Calendar o nei tuoi Google Tasks viene utilizzato per scopi pubblicitari, di tracciamento o per l'addestramento di modelli di intelligenza artificiale.
+
+---
+
+## 3. Conservazione dei Dati e Sicurezza
+* **Token di Autenticazione:** I token forniti da Google al momento dell'accesso (Access Token e Refresh Token) vengono conservati in modo sicuro e locale sul dispositivo o all'interno della sessione dell'applicazione al solo fine di mantenere attiva la connessione con i servizi Google.
+* **Nessun Database Esterno:** L'applicazione non gestisce un database proprietario remoto dove risiedono i tuoi appuntamenti o le tue liste di compiti.
+
+---
+
+## 4. Revoca dell'accesso e cancellazione dei dati
+L'utente può revocare in qualsiasi momento l'accesso dell'applicazione ai propri account Google:
+1. Visitando la pagina di gestione delle app connesse di Google: [https://myaccount.google.com/permissions](https://myaccount.google.com/permissions).
+2. Rimuovendo l'accesso all'applicazione dalla lista.
+
+La revoca dell'accesso disattiverà immediatamente qualsiasi capacità dell'App di interagire con il tuo account Google.
+
+---
+
+## 5. Contatti
+Per qualsiasi domanda o chiarimento riguardo a queste Norme sulla Privacy o al funzionamento dell'applicazione, è possibile contattare lo sviluppatore tramite la pagina di contatto/issues del repository di questo progetto su GitHub.
