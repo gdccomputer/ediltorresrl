@@ -21,7 +21,23 @@
 
     <div id="status-message" class="status-box">Inizializzazione librerie Google...</div>
 
-    <!-- Tabella Task -->
+    <!-- Pulsante grande per aggiungere un appunto -->
+    <button id="btn-add-note" class="btn-add-note" style="display: none;">➕ Nuovo appunto</button>
+
+    <!-- Appunti (in cima, prima delle scadenze) -->
+    <section id="notes-section" class="section" style="display: none;">
+      <h2 class="section-title">📝 Appunti <span id="notes-count" class="count-pill"></span></h2>
+      <div id="notes-message" class="notes-message" style="display: none;"></div>
+      <ul id="notes-list" class="notes-list"></ul>
+
+      <details id="notes-done-wrap" class="notes-done" style="display: none;">
+        <summary id="notes-done-summary">Completati</summary>
+        <ul id="notes-done-list" class="notes-list"></ul>
+      </details>
+    </section>
+
+    <!-- Tabella Scadenze -->
+    <h2 class="section-title">📅 Scadenze</h2>
     <table class="task-table">
       <thead>
         <tr>
@@ -35,6 +51,21 @@
         <!-- Generato dinamicamente -->
       </tbody>
     </table>
+  </div>
+
+  <!-- Modal Nuovo / Modifica appunto -->
+  <div id="note-modal" class="modal">
+    <div class="modal-content">
+      <h3 id="note-modal-title">Nuovo appunto</h3>
+      <div class="form-group">
+        <input type="text" id="note-input" placeholder="Es. Comprare trapano" maxlength="300" autocomplete="off">
+      </div>
+      <div class="modal-actions">
+        <button id="btn-delete-note" class="btn btn-danger btn-delete-left" style="display: none;">🗑️ Elimina</button>
+        <button id="btn-save-note" class="btn btn-primary">Salva</button>
+        <button id="btn-close-note" class="btn btn-secondary">Annulla</button>
+      </div>
+    </div>
   </div>
 
   <!-- Modal Password Opzioni -->

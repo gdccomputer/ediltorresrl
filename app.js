@@ -8,6 +8,8 @@ let settings = {
 };
 
 let loadedEvents = [];
+let loadedNotes = [];
+let editingNoteId = null;
 
 function loadSettings() {
   try {
@@ -41,18 +43,20 @@ function saveSettings() {
   alert('Impostazioni salvate con successo!');
   document.getElementById('settings-modal').classList.remove('active');
 
-  refreshTasksSilent();
+  refreshAll();
 }
 
 /* ---------- Stato di accesso ---------- */
 
-// Mostra l'interfaccia da utente connesso e carica i task
+// Mostra l'interfaccia da utente connesso e carica appunti e scadenze
 async function onLoggedIn() {
   document.getElementById('btn-login').style.display = 'none';
   document.getElementById('btn-logout').style.display = 'inline-block';
   document.getElementById('btn-refresh').style.display = 'inline-block';
   document.getElementById('btn-settings').style.display = 'inline-block';
-  await refreshTasksSilent();
+  document.getElementById('btn-add-note').style.display = 'block';
+  document.getElementById('notes-section').style.display = 'block';
+  await refreshAll();
 }
 
 // Torna alla schermata iniziale (non connesso)
@@ -61,8 +65,14 @@ function onLoggedOut(message) {
   document.getElementById('btn-logout').style.display = 'none';
   document.getElementById('btn-refresh').style.display = 'none';
   document.getElementById('btn-settings').style.display = 'none';
+  document.getElementById('btn-add-note').style.display = 'none';
+  document.getElementById('notes-section').style.display = 'none';
+  document.getElementById('note-modal').classList.remove('active');
   document.getElementById('task-list').innerHTML = '';
+  document.getElementById('notes-list').innerHTML = '';
+  document.getElementById('notes-done-list').innerHTML = '';
   loadedEvents = [];
+  loadedNotes = [];
   showStatus(message || "Disconnesso. Clicca su 'Accedi'.", "#e3f2fd");
 }
 
@@ -70,6 +80,10 @@ function onLoggedOut(message) {
 function handleSessionExpired() {
   clearToken();
   onLoggedOut("Sessione scaduta. Clicca su 'Accedi' per continuare.");
+}
+
+async function refreshAll() {
+  await Promise.all([refreshNotes(), refreshTasksSilent()]);
 }
 
 async function refreshTasksSilent() {
@@ -88,7 +102,189 @@ async function refreshTasksSilent() {
   }
 }
 
-/* ---------- Logica task ---------- */
+/* ---------- Appunti (Google Tasks) ---------- */
+
+function setNotesMessage(text) {
+  const el = document.getElementById('notes-message');
+  el.textContent = text || '';
+  el.style.display = text ? 'block' : 'none';
+}
+
+async function refreshNotes() {
+  setNotesMessage('');
+  try {
+    loadedNotes = await fetchNotes(settings.pastDays);
+    renderNotes();
+  } catch (err) {
+    console.error("Errore appunti:", err);
+    if (isAuthError(err)) {
+      handleSessionExpired();
+      return;
+    }
+    setNotesMessage("Impossibile caricare gli appunti. Verifica che l'API Google Tasks sia abilitata e di aver concesso il permesso richiesto.");
+  }
+}
+
+function buildNoteItem(note) {
+  const done = note.status === 'completed';
+
+  const li = document.createElement('li');
+  li.className = 'note-item' + (done ? ' note-done' : '');
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'note-checkbox';
+  checkbox.checked = done;
+  checkbox.setAttribute('aria-label', 'Segna come completato');
+  checkbox.addEventListener('change', (e) => {
+    toggleNoteCompleted(note, e.target.checked);
+  });
+
+  const text = document.createElement('button');
+  text.type = 'button';
+  text.className = 'note-text';
+  text.textContent = note.title || 'Senza titolo';
+  text.addEventListener('click', () => openNoteModal(note));
+
+  li.append(checkbox, text);
+  return li;
+}
+
+function renderNotes() {
+  const openList = document.getElementById('notes-list');
+  const doneList = document.getElementById('notes-done-list');
+  const doneWrap = document.getElementById('notes-done-wrap');
+  const doneSummary = document.getElementById('notes-done-summary');
+  const count = document.getElementById('notes-count');
+
+  openList.innerHTML = '';
+  doneList.innerHTML = '';
+
+  const openNotes = loadedNotes.filter(n => n.status !== 'completed');
+  const doneNotes = loadedNotes
+    .filter(n => n.status === 'completed')
+    .sort((a, b) => new Date(b.completed || 0) - new Date(a.completed || 0));
+
+  count.textContent = openNotes.length > 0 ? openNotes.length : '';
+
+  if (openNotes.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'notes-empty';
+    li.textContent = 'Nessun appunto da fare. Premi «Nuovo appunto» per aggiungerne uno.';
+    openList.appendChild(li);
+  } else {
+    openNotes.forEach(n => openList.appendChild(buildNoteItem(n)));
+  }
+
+  if (doneNotes.length > 0) {
+    doneWrap.style.display = 'block';
+    doneSummary.textContent = `Completati (${doneNotes.length})`;
+    doneNotes.forEach(n => doneList.appendChild(buildNoteItem(n)));
+  } else {
+    doneWrap.style.display = 'none';
+  }
+}
+
+// Spunta / rimuove la spunta su un appunto
+async function toggleNoteCompleted(note, isChecked) {
+  const previous = { status: note.status, completed: note.completed };
+
+  note.status = isChecked ? 'completed' : 'needsAction';
+  note.completed = isChecked ? new Date().toISOString() : undefined;
+  renderNotes();
+
+  try {
+    await updateNote(note.id, isChecked
+      ? { status: 'completed' }
+      : { status: 'needsAction', completed: null });
+  } catch (err) {
+    console.error("Errore aggiornamento appunto:", err);
+    note.status = previous.status;
+    note.completed = previous.completed;
+    renderNotes();
+
+    if (isAuthError(err)) {
+      handleSessionExpired();
+    } else {
+      setNotesMessage("Impossibile salvare la modifica. Riprova.");
+    }
+  }
+}
+
+function openNoteModal(note) {
+  editingNoteId = note ? note.id : null;
+
+  document.getElementById('note-modal-title').textContent = note ? 'Modifica appunto' : 'Nuovo appunto';
+  document.getElementById('btn-delete-note').style.display = note ? 'inline-block' : 'none';
+
+  const input = document.getElementById('note-input');
+  input.value = note ? (note.title || '') : '';
+
+  document.getElementById('btn-save-note').disabled = false;
+  document.getElementById('note-modal').classList.add('active');
+  setTimeout(() => input.focus(), 50);
+}
+
+function closeNoteModal() {
+  document.getElementById('note-modal').classList.remove('active');
+  editingNoteId = null;
+}
+
+async function saveNote() {
+  const input = document.getElementById('note-input');
+  const title = input.value.trim();
+  if (!title) {
+    input.focus();
+    return;
+  }
+
+  const saveBtn = document.getElementById('btn-save-note');
+  saveBtn.disabled = true;
+
+  try {
+    if (editingNoteId) {
+      const updated = await updateNote(editingNoteId, { title });
+      const note = loadedNotes.find(n => n.id === editingNoteId);
+      if (note) note.title = updated.title || title;
+    } else {
+      const created = await addNote(title);
+      loadedNotes.unshift(created);
+    }
+    renderNotes();
+    setNotesMessage('');
+    closeNoteModal();
+  } catch (err) {
+    console.error("Errore salvataggio appunto:", err);
+    saveBtn.disabled = false;
+    if (isAuthError(err)) {
+      handleSessionExpired();
+    } else {
+      alert("Impossibile salvare l'appunto. Controlla la connessione e riprova.");
+    }
+  }
+}
+
+async function removeNote() {
+  if (!editingNoteId) return;
+  if (!confirm('Eliminare definitivamente questo appunto?')) return;
+
+  const idToDelete = editingNoteId;
+  try {
+    await deleteNote(idToDelete);
+    loadedNotes = loadedNotes.filter(n => n.id !== idToDelete);
+    renderNotes();
+    closeNoteModal();
+  } catch (err) {
+    console.error("Errore eliminazione appunto:", err);
+    if (isAuthError(err)) {
+      handleSessionExpired();
+    } else {
+      alert("Impossibile eliminare l'appunto. Riprova.");
+    }
+  }
+}
+
+/* ---------- Logica scadenze (Google Calendar) ---------- */
 
 // Controlla se il tag [FATTO] è presente nella descrizione
 function isEventCompleted(event) {
@@ -300,7 +496,19 @@ document.addEventListener('DOMContentLoaded', () => {
     onLoggedOut("Disconnesso. Clicca su 'Accedi' per riconnetterti.");
   });
 
-  document.getElementById('btn-refresh').addEventListener('click', refreshTasksSilent);
+  document.getElementById('btn-refresh').addEventListener('click', refreshAll);
+
+  // Appunti
+  document.getElementById('btn-add-note').addEventListener('click', () => openNoteModal(null));
+  document.getElementById('btn-save-note').addEventListener('click', saveNote);
+  document.getElementById('btn-close-note').addEventListener('click', closeNoteModal);
+  document.getElementById('btn-delete-note').addEventListener('click', removeNote);
+  document.getElementById('note-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveNote();
+    }
+  });
 
   // Modale PIN e Opzioni
   document.getElementById('btn-settings').addEventListener('click', () => {
